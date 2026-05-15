@@ -1,17 +1,12 @@
-/* ============================================================
-   ASTRA — AI Chat UI  |  app.js
-   API-ready structure — swap fakeAIResponse() with real fetch
-   ============================================================ */
-
 'use strict';
 
-// ── Config ──────────────────────────────────────────────────────────────────
-const API_URL = '/api/chat';           // Replace with real endpoint
-const MODEL   = 'astra-2.1';          // Model identifier for API payload
-const TYPING_SPEED = 18;              // ms per character (typewriter effect)
+//  Konfigurasi 
+const ALAMAT_API    = '/api/chat';     // Ganti dengan endpoint yang sebenarnya
+const NAMA_MODEL    = 'navas-2.1';    // Nama model yang dikirim ke API
+const KECEPATAN_KETIK = 18;           // Jeda per karakter efek mesin ketik (ms)
 
-// ── Fake responses (replace fakeAIResponse to go live) ──────────────────────
-const FAKE_RESPONSES = [
+//  Balasan palsu untuk demo (ganti fakeAIResponse() dengan callAPI() untuk live) 
+const BALASAN_DEMO = [
     'Menarik, coba kita lihat dari sudut pandang lain. Problem ini sebenarnya punya beberapa lapisan yang perlu diurai satu per satu.',
     'Kalau secara logika, ini bisa dijelaskan begini: ada separation of concerns yang kurang jelas di sini. Coba pisahkan responsibility masing-masing komponen dulu.',
     'Sebenarnya ada 2 kemungkinan utama. Pertama, pendekatan langsung yang cepat tapi technical debt-nya tinggi. Kedua, refactor dulu supaya scalable ke depannya.',
@@ -22,290 +17,298 @@ const FAKE_RESPONSES = [
     'Interesting approach. Trade-off-nya adalah: lo dapet simplicity sekarang tapi kalau requirement berubah, refactoring-nya lumayan. Worth it kalau timeline mepet, tapi dokumentasiin dulu tech debt-nya.',
 ];
 
-// ── State ────────────────────────────────────────────────────────────────────
-const state = {
-    messages:      [],    // Array of { role: 'user'|'assistant', content: string }
-    isLoading:     false,
-    activeChatId:  null,  // null = belum ada sesi aktif
-    chatIdCounter: 0,     // auto-increment ID untuk setiap sesi baru
-    isNewSession:  true,  // true = belum ada pesan dikirim di sesi ini
+//  Data kondisi aplikasi 
+const kondisi = {
+    daftarPesan:    [],     // Riwayat pesan: array of { role: 'user'|'assistant', content: string }
+    sedangMemuat:   false,  // True kalau lagi nunggu balasan dari AI
+    idChatAktif:    null,   // ID sesi chat yang sedang terbuka (null = belum ada)
+    hitungIdChat:   0,      // Penghitung ID sesi, naik setiap sesi baru dibuat
+    sesiBaruDibuka: true,   // True = belum ada pesan dikirim di sesi ini
 };
 
-// ── DOM refs ─────────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
+//  Referensi elemen HTML 
+const cari = id => document.getElementById(id);
 
-const dom = {
-    sidebar:          $('sidebar'),
-    btnSidebarToggle: $('btnSidebarToggle'),
-    btnNewChat:       $('btnNewChat'),
-    chatList:         $('chatList'),
-    chatListEmpty:    $('chatListEmpty'),
-    messagesViewport: $('messagesViewport'),
-    messagesFeed:     $('messagesFeed'),
-    welcomeState:     $('welcomeState'),
-    chatInput:        $('chatInput'),
-    btnSend:          $('btnSend'),
-    inputWrapper:     $('inputWrapper'),
-    chatTopbarTitle:  document.querySelector('.chat-topbar-title'),
+const elemen = {
+    sidebar:            cari('sidebar'),
+    tombolToggleSidebar: cari('btnSidebarToggle'),
+    tombolChatBaru:     cari('btnNewChat'),
+    daftarChat:         cari('chatList'),
+    pesanKosong:        cari('chatListEmpty'),
+    areaTampilPesan:    cari('messagesViewport'),
+    tempatPesan:        cari('messagesFeed'),
+    tampilanSelamatDatang: cari('welcomeState'),
+    kotakTulis:         cari('chatInput'),
+    tombolKirim:        cari('btnSend'),
+    pembungkusInput:    cari('inputWrapper'),
+    judulTopbar:        document.querySelector('.chat-topbar-title'),
 };
 
-// ── Render helpers ────────────────────────────────────────────────────────────
+//  Fungsi tampilan 
 
 /**
- * Render a single message bubble into the feed.
- * @param {{ role: 'user'|'assistant', content: string }} message
- * @param {boolean} animate - whether to run typewriter effect (AI only)
- * @returns {HTMLElement} the bubble element
+ * Menampilkan satu gelembung pesan ke dalam area percakapan.
+ * @param {{ role: 'user'|'assistant', content: string }} pesan
+ * @param {boolean} animasi - kalau true, pakai efek mesin ketik (khusus balasan AI)
+ * @returns {HTMLElement} elemen gelembung yang dibuat
  */
-function renderMessage(message, animate = false) {
-    const isUser = message.role === 'user';
+function tampilkanPesan(pesan, animasi = false) {
+    const dariUser = pesan.role === 'user';
 
-    const row = document.createElement('div');
-    row.className = `msg-row ${isUser ? 'user' : 'ai'}`;
+    const baris = document.createElement('div');
+    baris.className = `msg-row ${dariUser ? 'user' : 'ai'}`;
 
-    const avatar = document.createElement('div');
-    avatar.className = 'msg-avatar';
-    avatar.textContent = isUser ? 'U' : 'A';
+    const foto = document.createElement('div');
+    foto.className = 'msg-avatar';
+    foto.textContent = dariUser ? 'U' : 'A';
 
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
+    const gelembung = document.createElement('div');
+    gelembung.className = 'msg-bubble';
 
-    if (!animate || isUser) {
-        bubble.textContent = message.content;
+    if (!animasi || dariUser) {
+        gelembung.textContent = pesan.content;
     }
 
-    row.appendChild(avatar);
-    row.appendChild(bubble);
-    dom.messagesFeed.appendChild(row);
-    scrollToBottom();
+    baris.appendChild(foto);
+    baris.appendChild(gelembung);
+    elemen.tempatPesan.appendChild(baris);
+    gulirKeBawah();
 
-    if (animate && !isUser) {
-        typewriterEffect(bubble, message.content);
+    if (animasi && !dariUser) {
+        efekMesinKetik(gelembung, pesan.content);
     }
 
-    return bubble;
+    return gelembung;
 }
 
 /**
- * Show animated typing indicator while AI is "thinking".
- * @returns {{ el: HTMLElement, remove: Function }}
+ * Menampilkan animasi tiga titik saat AI sedang menyiapkan balasan.
+ * @returns {{ el: HTMLElement, hapus: Function }}
  */
-function showTypingIndicator() {
-    const row = document.createElement('div');
-    row.className = 'msg-row ai';
-    row.id = 'typingRow';
+function tampilkanIndikatorMenulis() {
+    const baris = document.createElement('div');
+    baris.className = 'msg-row ai';
+    baris.id = 'barisMenulis';
 
-    const avatar = document.createElement('div');
-    avatar.className = 'msg-avatar';
-    avatar.textContent = 'A';
+    const foto = document.createElement('div');
+    foto.className = 'msg-avatar';
+    foto.textContent = 'A';
 
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
+    const gelembung = document.createElement('div');
+    gelembung.className = 'msg-bubble';
 
-    const indicator = document.createElement('div');
-    indicator.className = 'typing-indicator';
+    const indikator = document.createElement('div');
+    indikator.className = 'typing-indicator';
     for (let i = 0; i < 3; i++) {
-        const dot = document.createElement('span');
-        dot.className = 'typing-dot';
-        indicator.appendChild(dot);
+        const titik = document.createElement('span');
+        titik.className = 'typing-dot';
+        indikator.appendChild(titik);
     }
 
-    bubble.appendChild(indicator);
-    row.appendChild(avatar);
-    row.appendChild(bubble);
-    dom.messagesFeed.appendChild(row);
-    scrollToBottom();
+    gelembung.appendChild(indikator);
+    baris.appendChild(foto);
+    baris.appendChild(gelembung);
+    elemen.tempatPesan.appendChild(baris);
+    gulirKeBawah();
 
     return {
-        el: row,
-        remove: () => row.remove(),
+        el: baris,
+        hapus: () => baris.remove(),
     };
 }
 
 /**
- * Typewriter reveal effect on an element.
- * @param {HTMLElement} el
- * @param {string} text
+ * Menampilkan teks karakter per karakter seperti efek mesin ketik.
+ * @param {HTMLElement} el - elemen yang akan diisi teks
+ * @param {string} teks - teks yang akan ditampilkan
  */
-async function typewriterEffect(el, text) {
+async function efekMesinKetik(el, teks) {
     el.textContent = '';
-    for (let i = 0; i < text.length; i++) {
-        el.textContent += text[i];
-        if (i % 3 === 0) scrollToBottom();
-        await sleep(TYPING_SPEED);
+    for (let i = 0; i < teks.length; i++) {
+        el.textContent += teks[i];
+        if (i % 3 === 0) gulirKeBawah();
+        await jeda(KECEPATAN_KETIK);
     }
-    scrollToBottom();
+    gulirKeBawah();
 }
 
-// ── Core chat logic ───────────────────────────────────────────────────────────
+//  Logika percakapan utama ─
 
 /**
- * Inject a new chat entry into the sidebar history.
- * Dipanggil sekali saat pesan pertama di sesi baru dikirim.
- * @param {string} id - chat session ID
- * @param {string} title - diambil dari pesan pertama user (truncated)
+ * Menambahkan entri sesi chat baru ke dalam daftar riwayat di sidebar.
+ * Dipanggil sekali saat pesan pertama dikirim di sesi yang baru dibuka.
+ * @param {string} id - ID unik sesi chat
+ * @param {string} judul - diambil dari isi pesan pertama user (dipotong kalau terlalu panjang)
  */
-function addChatToSidebar(id, title) {
-    // Sembunyikan empty state
-    dom.chatListEmpty.classList.add('hidden');
+function tambahChatKeSidebar(id, judul) {
+    // Sembunyikan tulisan "Belum ada chat"
+    elemen.pesanKosong.classList.add('hidden');
 
-    // Set semua item lain jadi tidak aktif
-    dom.chatList.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+    // Nonaktifkan highlight semua sesi lain
+    elemen.daftarChat.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
 
-    const truncated = title.length > 36 ? title.slice(0, 36).trimEnd() + '…' : title;
+    const judulPendek = judul.length > 36 ? judul.slice(0, 36).trimEnd() + '…' : judul;
 
-    const btn = document.createElement('button');
-    btn.className = 'chat-item active';
-    btn.dataset.id = id;
-    btn.innerHTML = `
+    const tombol = document.createElement('button');
+    tombol.className = 'chat-item active';
+    tombol.dataset.id = id;
+    tombol.innerHTML = `
         <svg class="chat-item-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M12 1H2a1 1 0 00-1 1v7a1 1 0 001 1h1.5L7 13l2.5-3H12a1 1 0 001-1V2a1 1 0 00-1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
         </svg>
-        <span class="chat-item-title">${truncated}</span>
-        <button class="btn-rename" title="Rename">✏️</button>
+        <span class="chat-item-title">${judulPendek}</span>
+        <button class="btn-rename" title="Ganti nama">✏️</button>
     `;
 
-    // Klik untuk switch (nanti bisa dihubungkan ke backend)
-    btn.addEventListener('click', () => {
-        dom.chatList.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
-        btn.classList.add('active');
-        state.activeChatId = id;
-        dom.chatTopbarTitle.textContent = truncated;
-        if (isMobile() && sidebarOpen) toggleSidebar();
+    // Klik untuk berpindah ke sesi ini
+    tombol.addEventListener('click', () => {
+        elemen.daftarChat.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+        tombol.classList.add('active');
+        kondisi.idChatAktif = id;
+        elemen.judulTopbar.textContent = judulPendek;
+        if (layarKecil() && sidebarTerbuka) toggleSidebar();
     });
-    const renameBtn = btn.querySelector('.btn-rename');
-    renameBtn.addEventListener('click', e => {
+
+    // Tombol ganti nama
+    const tombolGantiNama = tombol.querySelector('.btn-rename');
+    tombolGantiNama.addEventListener('click', e => {
         e.stopPropagation();
-        enableRenameMode(btn);
-    })
-    // Insert di paling atas (setelah empty state element)
-    dom.chatList.insertBefore(btn, dom.chatListEmpty.nextSibling);
+        aktifkanModeGantiNama(tombol);
+    });
+
+    // Sisipkan di posisi paling atas daftar
+    elemen.daftarChat.insertBefore(tombol, elemen.pesanKosong.nextSibling);
 }
 
-function enableRenameMode(btnItem) {
-    // ambil elemen span judulnya doang
-    const titleSpan = btnItem.querySelector('.chat-item-title')
-    const judulLama = titleSpan.textContent;
+/**
+ * Mengubah judul sesi chat menjadi input yang bisa diedit langsung.
+ * @param {HTMLElement} itemChat - elemen tombol sesi di sidebar
+ */
+function aktifkanModeGantiNama(itemChat) {
+    const spanJudul = itemChat.querySelector('.chat-item-title');
+    const judulLama = spanJudul.textContent;
 
-    // ganti span jadi input
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = judulLama;
-    input.className = 'rename-input';
-    titleSpan.replaceWith(input);
-    
-    // langsung select semua text
-    input.focus();
-    input.select();
+    // Ganti tampilan judul dengan kotak teks
+    const inputNama = document.createElement('input');
+    inputNama.type = 'text';
+    inputNama.value = judulLama;
+    inputNama.className = 'rename-input';
+    spanJudul.replaceWith(inputNama);
 
-    // fungsi simpan
-    function saveRename() {
-        const judulBaru = input.value.trim() || judulLama;
-        const span = document.createElement('span')
-        span.className = 'chat-item-title';
-        span.textContent =judulBaru;
-        input.replaceWith(span);
+    inputNama.focus();
+    inputNama.select();
 
-        // update topbarnya kalo chat ini aktif
-        if (btnItem.dataset.id === state.activeChatId) {
-            dom.chatTopbarTitle.textContent = judulBaru;
+    // Simpan nama baru dan kembalikan ke tampilan normal
+    function simpanNamaBaru() {
+        const judulBaru = inputNama.value.trim() || judulLama;
+        const spanBaru = document.createElement('span');
+        spanBaru.className = 'chat-item-title';
+        spanBaru.textContent = judulBaru;
+        inputNama.replaceWith(spanBaru);
+
+        // Perbarui judul di topbar kalau ini sesi yang aktif
+        if (itemChat.dataset.id === kondisi.idChatAktif) {
+            elemen.judulTopbar.textContent = judulBaru;
         }
-    input.addEventListener('keydown', e => {
+    }
+
+    inputNama.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
-            preventDefault(); 
-            saveRename();}
-        
-        if (e.key === 'Escape') {
-            const span = document.createElement('span');
-            span.className = 'chat-item-title';
-            span.textContent = judulLama;
-            input.replaceWith(span);
+            e.preventDefault();
+            simpanNamaBaru();
         }
-    }
+        if (e.key === 'Escape') {
+            const spanBatal = document.createElement('span');
+            spanBatal.className = 'chat-item-title';
+            spanBatal.textContent = judulLama;
+            inputNama.replaceWith(spanBatal);
+        }
+    });
 
-    )}
-
-    input.addEventListener('blur', saveRename);
-
+    inputNama.addEventListener('blur', simpanNamaBaru);
 }
-//  * To integrate real backend: replace fakeAIResponse() call below
-//  * with a call to callAPI() — no other changes needed.
-//  */
-async function sendMessage(content) {
-    if (!content.trim() || state.isLoading) return;
 
-    // Hide welcome, show feed area
-    hideWelcomeState();
+/**
+ * Mengirim pesan dari user, menampilkannya, lalu meminta balasan dari AI.
+ *
+ * Untuk menghubungkan ke backend sungguhan:
+ * ganti baris fakeAIResponse() di bawah dengan callAPI(kondisi.daftarPesan)
+ */
+async function kirimPesan(isi) {
+    if (!isi.trim() || kondisi.sedangMemuat) return;
 
-    // Kalau ini pesan pertama di sesi ini, buat entri baru di sidebar
-    if (state.isNewSession) {
-        state.chatIdCounter += 1;
-        state.activeChatId = String(state.chatIdCounter);
-        state.isNewSession = false;
-        addChatToSidebar(state.activeChatId, content.trim());
-        dom.chatTopbarTitle.textContent = content.trim().length > 36
-            ? content.trim().slice(0, 36).trimEnd() + '…'
-            : content.trim();
+    // Sembunyikan tampilan selamat datang, tampilkan area percakapan
+    sembunyikanSelamatDatang();
+
+    // Kalau ini pesan pertama di sesi ini, buat sesi baru di sidebar
+    if (kondisi.sesiBaruDibuka) {
+        kondisi.hitungIdChat += 1;
+        kondisi.idChatAktif = String(kondisi.hitungIdChat);
+        kondisi.sesiBaruDibuka = false;
+        tambahChatKeSidebar(kondisi.idChatAktif, isi.trim());
+        elemen.judulTopbar.textContent = isi.trim().length > 36
+            ? isi.trim().slice(0, 36).trimEnd() + '…'
+            : isi.trim();
     }
 
+    // Simpan pesan user ke riwayat
+    const pesanUser = { role: 'user', content: isi.trim() };
+    kondisi.daftarPesan.push(pesanUser);
 
-    // Add to state
-    const userMsg = { role: 'user', content: content.trim() };
-    state.messages.push(userMsg);
+    // Tampilkan gelembung pesan user
+    tampilkanPesan(pesanUser);
 
-    // Render user bubble
-    renderMessage(userMsg);
+    // Kosongkan kotak tulis dan aktifkan status memuat
+    elemen.kotakTulis.value = '';
+    sesuaikanTinggiInput();
+    aturStatusMemuat(true);
 
-    // Clear input & set loading
-    dom.chatInput.value = '';
-    autoResizeTextarea();
-    setLoading(true);
-
-    // Get AI response
-    const typing = showTypingIndicator();
+    // Tampilkan animasi tiga titik sementara AI menyiapkan balasan
+    const menulis = tampilkanIndikatorMenulis();
 
     try {
-        // ── SWAP THIS LINE to go live ──────────────────────────────────────
-        // const aiContent = await callAPI(state.messages);   // Real backend
-        const aiContent = await fakeAIResponse();             // Demo only
-        // ──────────────────────────────────────────────────────────────────
+        //  GANTI BARIS INI untuk mode live ─
+        // const isiBalasan = await callAPI(kondisi.daftarPesan);  // Backend sungguhan
+        const isiBalasan = await fakeAIResponse();                 // Mode demo saja
+        // 
 
-        typing.remove();
+        menulis.hapus();
 
-        const aiMsg = { role: 'assistant', content: aiContent };
-        state.messages.push(aiMsg);
-        renderMessage(aiMsg, true); // true = typewriter effect
+        const pesanAI = { role: 'assistant', content: isiBalasan };
+        kondisi.daftarPesan.push(pesanAI);
+        tampilkanPesan(pesanAI, true); // true = pakai efek mesin ketik
 
-    } catch (err) {
-        typing.remove();
-        renderMessage({
+    } catch (galat) {
+        menulis.hapus();
+        tampilkanPesan({
             role: 'assistant',
-            content: `Something went wrong: ${err.message}. Please try again.`,
+            content: `Terjadi kesalahan: ${galat.message}. Silakan coba lagi.`,
         });
-        console.error('[Astra] sendMessage error:', err);
+        console.error('[Navas] Gagal mengirim pesan:', galat);
     } finally {
-        setLoading(false);
+        aturStatusMemuat(false);
     }
 }
 
 /**
- * FAKE AI response for demo/development.
- * Simulates network delay + thinking time.
+ * Balasan palsu untuk keperluan demo dan pengembangan.
+ * Meniru jeda jaringan dan waktu berpikir AI.
  * @returns {Promise<string>}
  */
 async function fakeAIResponse() {
-    const thinkTime = 800 + Math.random() * 1000;
-    await sleep(thinkTime);
-    return FAKE_RESPONSES[Math.floor(Math.random() * FAKE_RESPONSES.length)];
+    const waktuTunggu = 800 + Math.random() * 1000;
+    await jeda(waktuTunggu);
+    return BALASAN_DEMO[Math.floor(Math.random() * BALASAN_DEMO.length)];
 }
 
 /**
- * REAL API call — uncomment and use when backend is ready.
- * @param {Array<{role: string, content: string}>} messages
+ * Memanggil API backend sungguhan dengan riwayat percakapan.
+ * Aktifkan fungsi ini (dan nonaktifkan fakeAIResponse) saat backend sudah siap.
+ * @param {Array<{role: string, content: string}>} daftarPesan
  * @returns {Promise<string>}
  */
-async function callAPI(messages) {
-    const response = await fetch(API_URL, {
+async function callAPI(daftarPesan) {
+    const respons = await fetch(ALAMAT_API, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -313,183 +316,193 @@ async function callAPI(messages) {
             'Accept': 'application/json',
         },
         body: JSON.stringify({
-            model: MODEL,
-            messages: messages,
+            model: NAMA_MODEL,
+            messages: daftarPesan,
         }),
     });
 
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message ?? `HTTP ${response.status}`);
+    if (!respons.ok) {
+        const info = await respons.json().catch(() => ({}));
+        throw new Error(info.message ?? `HTTP ${respons.status}`);
     }
 
-    const data = await response.json();
+    const data = await respons.json();
 
-    // Adjust this path to match your API response shape:
+    // Sesuaikan path di bawah dengan format respons API yang dipakai:
     return data?.message?.content
         ?? data?.choices?.[0]?.message?.content
         ?? data?.content
-        ?? 'No response from server.';
+        ?? 'Tidak ada balasan dari server.';
 }
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
+//  Fungsi bantuan tampilan ─
 
-function setLoading(loading) {
-    state.isLoading = loading;
-    dom.chatInput.disabled = loading;
+/** Mengatur tampilan tombol kirim dan status loading berdasarkan kondisi saat ini. */
+function aturStatusMemuat(sedangMemuat) {
+    kondisi.sedangMemuat = sedangMemuat;
+    elemen.kotakTulis.disabled = sedangMemuat;
 
-    if (loading) {
-        dom.btnSend.classList.add('loading');
-        dom.btnSend.disabled = true;
+    if (sedangMemuat) {
+        elemen.tombolKirim.classList.add('loading');
+        elemen.tombolKirim.disabled = true;
     } else {
-        dom.btnSend.classList.remove('loading');
-        updateSendButton();
+        elemen.tombolKirim.classList.remove('loading');
+        perbaruiTombolKirim();
     }
 }
 
-function updateSendButton() {
-    const hasText = dom.chatInput.value.trim().length > 0;
-    dom.btnSend.disabled = !hasText || state.isLoading;
-    dom.btnSend.style.opacity = (hasText && !state.isLoading) ? '1' : '0.35';
-    dom.btnSend.style.pointerEvents = (hasText && !state.isLoading) ? 'auto' : 'none';
+/** Memperbarui tampilan tombol kirim: aktif kalau ada teks, nonaktif kalau kosong atau sedang memuat. */
+function perbaruiTombolKirim() {
+    const adaTeks = elemen.kotakTulis.value.trim().length > 0;
+    elemen.tombolKirim.disabled = !adaTeks || kondisi.sedangMemuat;
+    elemen.tombolKirim.style.opacity = (adaTeks && !kondisi.sedangMemuat) ? '1' : '0.35';
+    elemen.tombolKirim.style.pointerEvents = (adaTeks && !kondisi.sedangMemuat) ? 'auto' : 'none';
 }
 
-function autoResizeTextarea() {
-    const el = dom.chatInput;
+/** Menyesuaikan tinggi kotak tulis secara otomatis mengikuti isi teks (maksimal 200px). */
+function sesuaikanTinggiInput() {
+    const el = elemen.kotakTulis;
     el.style.height = 'auto';
-    const maxH = 200;
-    el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
-    updateSendButton();
+    const tinggiMaksimal = 200;
+    el.style.height = Math.min(el.scrollHeight, tinggiMaksimal) + 'px';
+    perbaruiTombolKirim();
 }
 
-function scrollToBottom(smooth = true) {
-    dom.messagesViewport.scrollTo({
-        top: dom.messagesViewport.scrollHeight,
-        behavior: smooth ? 'smooth' : 'instant',
+/** Menggulir area pesan ke bagian paling bawah. */
+function gulirKeBawah(halus = true) {
+    elemen.areaTampilPesan.scrollTo({
+        top: elemen.areaTampilPesan.scrollHeight,
+        behavior: halus ? 'smooth' : 'instant',
     });
 }
 
-function hideWelcomeState() {
-    if (dom.welcomeState && !dom.welcomeState.classList.contains('hidden')) {
-        dom.welcomeState.classList.add('hidden');
+/** Menyembunyikan tampilan selamat datang saat percakapan dimulai. */
+function sembunyikanSelamatDatang() {
+    if (elemen.tampilanSelamatDatang && !elemen.tampilanSelamatDatang.classList.contains('hidden')) {
+        elemen.tampilanSelamatDatang.classList.add('hidden');
     }
 }
 
-function showWelcomeState() {
-    if (dom.welcomeState) {
-        dom.welcomeState.classList.remove('hidden');
+/** Menampilkan kembali halaman selamat datang (saat chat direset). */
+function tampilkanSelamatDatang() {
+    if (elemen.tampilanSelamatDatang) {
+        elemen.tampilanSelamatDatang.classList.remove('hidden');
     }
 }
 
-function resetChat() {
-    state.messages = [];
-    state.isLoading = false;
-    state.isNewSession = true;
-    state.activeChatId = null;
-    dom.messagesFeed.innerHTML = '';
-    dom.chatInput.value = '';
-    dom.chatInput.style.height = 'auto';
-    showWelcomeState();
-    updateSendButton();
-    dom.chatTopbarTitle.textContent = 'New Chat';
+/** Mereset seluruh percakapan: bersihkan riwayat, tampilan, dan kondisi aplikasi. */
+function resetPercakapan() {
+    kondisi.daftarPesan = [];
+    kondisi.sedangMemuat = false;
+    kondisi.sesiBaruDibuka = true;
+    kondisi.idChatAktif = null;
+    elemen.tempatPesan.innerHTML = '';
+    elemen.kotakTulis.value = '';
+    elemen.kotakTulis.style.height = 'auto';
+    tampilkanSelamatDatang();
+    perbaruiTombolKirim();
+    elemen.judulTopbar.textContent = 'Chat baru';
 }
 
-function sleep(ms) {
+/** Fungsi jeda async sederhana. */
+function jeda(ms) {
     return new Promise(res => setTimeout(res, ms));
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+//  Sidebar ─
 
-function isMobile() { return window.innerWidth <= 680; }
+/** Mengecek apakah layar sedang dalam mode mobile (lebar ≤ 680px). */
+function layarKecil() { return window.innerWidth <= 680; }
 
-let sidebarOpen = true;
+let sidebarTerbuka = true;
 
+/** Membuka atau menutup sidebar. Di mobile, tampilkan overlay gelap di belakangnya. */
 function toggleSidebar() {
-    sidebarOpen = !sidebarOpen;
+    sidebarTerbuka = !sidebarTerbuka;
 
-    if (sidebarOpen) {
-        dom.sidebar.classList.remove('collapsed');
+    if (sidebarTerbuka) {
+        elemen.sidebar.classList.remove('collapsed');
     } else {
-        dom.sidebar.classList.add('collapsed');
+        elemen.sidebar.classList.add('collapsed');
     }
 
-    // Mobile overlay
-    let overlay = document.querySelector('.sidebar-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'sidebar-overlay';
-        document.body.appendChild(overlay);
-        overlay.addEventListener('click', toggleSidebar);
+    // Kelola overlay untuk mode mobile
+    let tirai = document.querySelector('.sidebar-overlay');
+    if (!tirai) {
+        tirai = document.createElement('div');
+        tirai.className = 'sidebar-overlay';
+        document.body.appendChild(tirai);
+        tirai.addEventListener('click', toggleSidebar);
     }
 
-    if (isMobile() && sidebarOpen) {
-        overlay.classList.add('visible');
+    if (layarKecil() && sidebarTerbuka) {
+        tirai.classList.add('visible');
     } else {
-        overlay.classList.remove('visible');
+        tirai.classList.remove('visible');
     }
 }
 
-// Init: collapse sidebar on mobile
-function initSidebarState() {
-    if (isMobile()) {
-        sidebarOpen = false;
-        dom.sidebar.classList.add('collapsed');
+/** Mengatur kondisi awal sidebar: ditutup otomatis kalau dibuka di layar kecil. */
+function inisialisasiSidebar() {
+    if (layarKecil()) {
+        sidebarTerbuka = false;
+        elemen.sidebar.classList.add('collapsed');
     }
 }
 
-// ── Event listeners ───────────────────────────────────────────────────────────
+//  Pasang event listener ─
 
-function initEvents() {
-    // Input resize & send button state
-    dom.chatInput.addEventListener('input', autoResizeTextarea);
+function pasangEvent() {
+    // Sesuaikan tinggi kotak tulis setiap kali isi berubah
+    elemen.kotakTulis.addEventListener('input', sesuaikanTinggiInput);
 
-    // Enter = send, Shift+Enter = newline
-    dom.chatInput.addEventListener('keydown', e => {
+    // Enter untuk kirim, Shift+Enter untuk baris baru
+    elemen.kotakTulis.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            if (!state.isLoading && dom.chatInput.value.trim()) {
-                sendMessage(dom.chatInput.value);
+            if (!kondisi.sedangMemuat && elemen.kotakTulis.value.trim()) {
+                kirimPesan(elemen.kotakTulis.value);
             }
         }
     });
 
-    // Send button
-    dom.btnSend.addEventListener('click', () => {
-        if (!state.isLoading && dom.chatInput.value.trim()) {
-            sendMessage(dom.chatInput.value);
+    // Tombol kirim diklik
+    elemen.tombolKirim.addEventListener('click', () => {
+        if (!kondisi.sedangMemuat && elemen.kotakTulis.value.trim()) {
+            kirimPesan(elemen.kotakTulis.value);
         }
     });
 
-    // New chat
-    dom.btnNewChat.addEventListener('click', () => {
-        resetChat();
-        dom.chatList.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
-        if (isMobile() && sidebarOpen) toggleSidebar();
+    // Tombol chat baru: reset percakapan
+    elemen.tombolChatBaru.addEventListener('click', () => {
+        resetPercakapan();
+        elemen.daftarChat.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+        if (layarKecil() && sidebarTerbuka) toggleSidebar();
     });
 
-    // Sidebar toggle
-    dom.btnSidebarToggle.addEventListener('click', toggleSidebar);
+    // Tombol buka/tutup sidebar
+    elemen.tombolToggleSidebar.addEventListener('click', toggleSidebar);
 
-    // Suggestion chips
+    // Klik pada chip saran langsung mengirim pesan
     document.querySelectorAll('.chip').forEach(chip => {
         chip.addEventListener('click', () => {
-            const prompt = chip.dataset.prompt;
-            if (prompt) {
-                dom.chatInput.value = prompt;
-                autoResizeTextarea();
-                dom.chatInput.focus();
-                sendMessage(prompt);
+            const teksPrompt = chip.dataset.prompt;
+            if (teksPrompt) {
+                elemen.kotakTulis.value = teksPrompt;
+                sesuaikanTinggiInput();
+                elemen.kotakTulis.focus();
+                kirimPesan(teksPrompt);
             }
         });
     });
 }
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
+//  Jalankan aplikasi ─
 
-function init() {
-    initSidebarState();
-    initEvents();
-    updateSendButton();
+function mulai() {
+    inisialisasiSidebar();
+    pasangEvent();
+    perbaruiTombolKirim();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', mulai);

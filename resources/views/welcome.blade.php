@@ -32,7 +32,7 @@
         <div class="sidebar-section-label">Terbaru</div>
 
         <nav class="chat-list" id="chatList">
-            <!-- Buat history chat yang bisa di tambahin lewat js -->
+            <!-- Riwayat chat bakal di tampilin di sini setiap si user ngetik  -->
             <div class="chat-list-empty" id="chatListEmpty">
                 <span>Belum ada chat</span>
             </div>
@@ -82,14 +82,14 @@
                     <h1 class="welcome-heading">Ada yang bisa kita bantu?</h1>
                     <p class="welcome-sub">Tanya apa aja, seperti tugas harian, pengembangan diri, dan lain lain</p>
                     <div class="suggestion-chips">
-                        <button class="chip" data-prompt="Explain how async/await works in JavaScript">Bantu tugas matematika</button>
-                        <button class="chip" data-prompt="Review my code for best practices">Koreksi jawaban ku</button>
-                        <button class="chip" data-prompt="Help me design a REST API">Cara menjadi lebih baik dari hari ini</button>
-                        <button class="chip" data-prompt="Write unit tests for my function">Rekomendasi buku yang bagus untuk belajar finansial</button>
+                        <button class="chip" data-prompt="Bantu tugas matematika">Bantu tugas matematika</button>
+                        <button class="chip" data-prompt="Koreksi jawaban ku">Koreksi jawaban ku</button>
+                        <button class="chip" data-prompt="Cara menjadi lebih baik dari hari ini">Cara menjadi lebih baik dari hari ini</button>
+                        <button class="chip" data-prompt="Rekomendasi buku yang bagus untuk belajar finansial">Rekomendasi buku yang bagus untuk belajar finansial</button>
                     </div>
                 </div>
 
-                <!-- Me render pesan -->
+                <!-- Pesan bakal muncul di sini dan di isi nya sama si javascript-->
                 <div class="messages-feed" id="messagesFeed"></div>
 
             </div>
