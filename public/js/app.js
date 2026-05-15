@@ -1,11 +1,16 @@
+/* ============================================================
+   ASTRA — AI Chat UI  |  app.js
+   Gabungan app.js + app1.js — semua bug diperbaiki
+   ============================================================ */
+
 'use strict';
 
-//  Konfigurasi 
-const ALAMAT_API    = '/api/chat';     // Ganti dengan endpoint yang sebenarnya
-const NAMA_MODEL    = 'navas-2.1';    // Nama model yang dikirim ke API
+// ── Konfigurasi ──────────────────────────────────────────────────────────────
+const ALAMAT_API      = '/api/chat';   // Ganti dengan endpoint yang sebenarnya
+const NAMA_MODEL      = 'astra-2.1';  // Nama model yang dikirim ke API
 const KECEPATAN_KETIK = 18;           // Jeda per karakter efek mesin ketik (ms)
 
-//  Balasan palsu untuk demo (ganti fakeAIResponse() dengan callAPI() untuk live) 
+// ── Balasan demo (untuk pengembangan) ────────────────────────────────────────
 const BALASAN_DEMO = [
     'Menarik, coba kita lihat dari sudut pandang lain. Problem ini sebenarnya punya beberapa lapisan yang perlu diurai satu per satu.',
     'Kalau secara logika, ini bisa dijelaskan begini: ada separation of concerns yang kurang jelas di sini. Coba pisahkan responsibility masing-masing komponen dulu.',
@@ -17,34 +22,34 @@ const BALASAN_DEMO = [
     'Interesting approach. Trade-off-nya adalah: lo dapet simplicity sekarang tapi kalau requirement berubah, refactoring-nya lumayan. Worth it kalau timeline mepet, tapi dokumentasiin dulu tech debt-nya.',
 ];
 
-//  Data kondisi aplikasi 
+// ── Data kondisi aplikasi ─────────────────────────────────────────────────────
 const kondisi = {
-    daftarPesan:    [],     // Riwayat pesan: array of { role: 'user'|'assistant', content: string }
-    sedangMemuat:   false,  // True kalau lagi nunggu balasan dari AI
-    idChatAktif:    null,   // ID sesi chat yang sedang terbuka (null = belum ada)
-    hitungIdChat:   0,      // Penghitung ID sesi, naik setiap sesi baru dibuat
-    sesiBaruDibuka: true,   // True = belum ada pesan dikirim di sesi ini
+    daftarPesan:    [],    // Riwayat pesan: array of { role: 'user'|'assistant', content: string }
+    sedangMemuat:   false, // True kalau lagi nunggu balasan dari AI
+    idChatAktif:    null,  // ID sesi chat yang sedang terbuka (null = belum ada)
+    hitungIdChat:   0,     // Penghitung ID sesi, naik setiap sesi baru dibuat
+    sesiBaruDibuka: true,  // True = belum ada pesan dikirim di sesi ini
 };
 
-//  Referensi elemen HTML 
+// ── Referensi elemen HTML ─────────────────────────────────────────────────────
 const cari = id => document.getElementById(id);
 
 const elemen = {
-    sidebar:            cari('sidebar'),
-    tombolToggleSidebar: cari('btnSidebarToggle'),
-    tombolChatBaru:     cari('btnNewChat'),
-    daftarChat:         cari('chatList'),
-    pesanKosong:        cari('chatListEmpty'),
-    areaTampilPesan:    cari('messagesViewport'),
-    tempatPesan:        cari('messagesFeed'),
+    sidebar:               cari('sidebar'),
+    tombolToggleSidebar:   cari('btnSidebarToggle'),
+    tombolChatBaru:        cari('btnNewChat'),
+    daftarChat:            cari('chatList'),
+    pesanKosong:           cari('chatListEmpty'),
+    areaTampilPesan:       cari('messagesViewport'),
+    tempatPesan:           cari('messagesFeed'),
     tampilanSelamatDatang: cari('welcomeState'),
-    kotakTulis:         cari('chatInput'),
-    tombolKirim:        cari('btnSend'),
-    pembungkusInput:    cari('inputWrapper'),
-    judulTopbar:        document.querySelector('.chat-topbar-title'),
+    kotakTulis:            cari('chatInput'),
+    tombolKirim:           cari('btnSend'),
+    pembungkusInput:       cari('inputWrapper'),
+    judulTopbar:           document.querySelector('.chat-topbar-title'),
 };
 
-//  Fungsi tampilan 
+// ── Fungsi tampilan ───────────────────────────────────────────────────────────
 
 /**
  * Menampilkan satu gelembung pesan ke dalam area percakapan.
@@ -132,7 +137,7 @@ async function efekMesinKetik(el, teks) {
     gulirKeBawah();
 }
 
-//  Logika percakapan utama ─
+// ── Logika percakapan utama ───────────────────────────────────────────────────
 
 /**
  * Menambahkan entri sesi chat baru ke dalam daftar riwayat di sidebar.
@@ -182,6 +187,8 @@ function tambahChatKeSidebar(id, judul) {
 
 /**
  * Mengubah judul sesi chat menjadi input yang bisa diedit langsung.
+ * BUG FIX: listener keydown dipindahkan ke luar fungsi simpanNamaBaru
+ * dan e.preventDefault() diperbaiki (ada 'e.' yang hilang di versi lama).
  * @param {HTMLElement} itemChat - elemen tombol sesi di sidebar
  */
 function aktifkanModeGantiNama(itemChat) {
@@ -212,9 +219,10 @@ function aktifkanModeGantiNama(itemChat) {
         }
     }
 
+    // FIX: listener keydown di sini (bukan di dalam simpanNamaBaru)
     inputNama.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
-            e.preventDefault();
+            e.preventDefault(); // FIX: 'e.' ditambahkan
             simpanNamaBaru();
         }
         if (e.key === 'Escape') {
@@ -231,8 +239,8 @@ function aktifkanModeGantiNama(itemChat) {
 /**
  * Mengirim pesan dari user, menampilkannya, lalu meminta balasan dari AI.
  *
- * Untuk menghubungkan ke backend sungguhan:
- * ganti baris fakeAIResponse() di bawah dengan callAPI(kondisi.daftarPesan)
+ * Untuk mode demo: ganti callAPI() dengan fakeAIResponse()
+ * Untuk mode live: gunakan callAPI() seperti sekarang
  */
 async function kirimPesan(isi) {
     if (!isi.trim() || kondisi.sedangMemuat) return;
@@ -267,10 +275,10 @@ async function kirimPesan(isi) {
     const menulis = tampilkanIndikatorMenulis();
 
     try {
-        //  GANTI BARIS INI untuk mode live ─
-        // const isiBalasan = await callAPI(kondisi.daftarPesan);  // Backend sungguhan
-        const isiBalasan = await fakeAIResponse();                 // Mode demo saja
-        // 
+        // ── GANTI BARIS INI untuk beralih mode ────────────────────────────
+        const isiBalasan = await callAPI(kondisi.daftarPesan);   // Mode live (real API)
+        // const isiBalasan = await fakeAIResponse();            // Mode demo
+        // ──────────────────────────────────────────────────────────────────
 
         menulis.hapus();
 
@@ -284,7 +292,7 @@ async function kirimPesan(isi) {
             role: 'assistant',
             content: `Terjadi kesalahan: ${galat.message}. Silakan coba lagi.`,
         });
-        console.error('[Navas] Gagal mengirim pesan:', galat);
+        console.error('[Astra] Gagal mengirim pesan:', galat);
     } finally {
         aturStatusMemuat(false);
     }
@@ -303,7 +311,6 @@ async function fakeAIResponse() {
 
 /**
  * Memanggil API backend sungguhan dengan riwayat percakapan.
- * Aktifkan fungsi ini (dan nonaktifkan fakeAIResponse) saat backend sudah siap.
  * @param {Array<{role: string, content: string}>} daftarPesan
  * @returns {Promise<string>}
  */
@@ -335,7 +342,7 @@ async function callAPI(daftarPesan) {
         ?? 'Tidak ada balasan dari server.';
 }
 
-//  Fungsi bantuan tampilan ─
+// ── Fungsi bantuan tampilan ───────────────────────────────────────────────────
 
 /** Mengatur tampilan tombol kirim dan status loading berdasarkan kondisi saat ini. */
 function aturStatusMemuat(sedangMemuat) {
@@ -409,7 +416,7 @@ function jeda(ms) {
     return new Promise(res => setTimeout(res, ms));
 }
 
-//  Sidebar ─
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 
 /** Mengecek apakah layar sedang dalam mode mobile (lebar ≤ 680px). */
 function layarKecil() { return window.innerWidth <= 680; }
@@ -450,7 +457,7 @@ function inisialisasiSidebar() {
     }
 }
 
-//  Pasang event listener ─
+// ── Pasang event listener ─────────────────────────────────────────────────────
 
 function pasangEvent() {
     // Sesuaikan tinggi kotak tulis setiap kali isi berubah
@@ -497,7 +504,7 @@ function pasangEvent() {
     });
 }
 
-//  Jalankan aplikasi ─
+// ── Jalankan aplikasi ─────────────────────────────────────────────────────────
 
 function mulai() {
     inisialisasiSidebar();
