@@ -10,13 +10,15 @@ class ChatController extends Controller
 {
     public function handle(Request $request)
     {
-        $messages = $request->input('messages', []);
+        $messages = $request->input('messages', []);    // -> Ambil pesan user
 
         $lastMessage = strtolower(
             collect($messages)->where('role', 'user')->last()['content'] ?? ''
-        );
+        );  // -> Ambil chat terakhir user
 
         // ── Deteksi tanggal ───────────────────────────────────────────────
+        // Kalau ketemu: ➡ disimpan ke $tanggalFilter
+        // Jadi AI bisa filter data berdasarkan tanggal.
         $tanggalFilter = null;
         $bulan = [
             'januari'=>1,'februari'=>2,'maret'=>3,'april'=>4,
@@ -31,15 +33,17 @@ class ChatController extends Controller
         }
 
         // ── Deteksi nama barang ───────────────────────────────────────────
+        // Berisi daftar barang. 
         $barangList = [
             'GREEN_CANDY','WHITE_GIFT','PURPLE_CANDY','BLUE_SHARK_TOOTH',
             'RED_GIFT','NURSE_SHARK_TOOTH','TIGER_SHARK_TOOTH',
             'SHARK_FIN','GRIFFIN_FEATHER','GREEN_GIFT',
-        ];
+        ]; 
         $barangFilter = null;
         foreach ($barangList as $b) {
-            if (str_contains($lastMessage, strtolower($b))) {
-                $barangFilter = $b;
+            if (str_contains($lastMessage, strtolower($b))) { // str_contains() 
+            // //dipakai untuk cek: apakah nama barang ada di chat user. Kalau ada: ➡ disimpan ke $barangFilter
+                $barangFilter = $b;                  
                 break;
             }
         }
