@@ -27,6 +27,7 @@ class ChatController extends Controller
         ];
 
         if (preg_match('/(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\s+(\d{4})/i', $lastMessage, $m)) {
+            // preg_match fungsi mendeteksi apakah user mengetik tanggal. kalau ketemu ➡ disimpan ke $tanggalFilter
             $tanggalFilter = sprintf('%04d-%02d-%02d', $m[3], $bulan[strtolower($m[2])], (int)$m[1]);
         } elseif (preg_match('/(\d{4})-(\d{2})-(\d{2})/', $lastMessage, $m)) {
             $tanggalFilter = $m[0];
